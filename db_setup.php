@@ -28,7 +28,7 @@ $page_title = "Music Cloud Community - Database Setup & Health Check (Aiven Clou
         }
         .setup-card {
             width: 100%;
-            max-width: 820px;
+            max-width: 840px;
             box-shadow: 0 15px 35px rgba(0,0,0,0.6);
             border-radius: 12px;
             overflow: hidden;
@@ -82,13 +82,72 @@ $page_title = "Music Cloud Community - Database Setup & Health Check (Aiven Clou
 
     <div class="card-body p-4">
         <?php
-        // Resolve database credentials from POST or Environment or Defaults
+        // Resolve database credentials from POST or Environment or Saved or Defaults
+        $custom_submitted = !empty($_POST['custom_host']);
         $db_host = !empty($_POST['custom_host']) ? trim($_POST['custom_host']) : (defined('DB_SERVER') ? DB_SERVER : 'localhost');
-        $db_port = !empty($_POST['custom_port']) ? (int)$_POST['custom_port'] : (defined('DB_PORT') ? (int)DB_PORT : 3306);
-        $db_user = !empty($_POST['custom_user']) ? trim($_POST['custom_user']) : (defined('DB_USERNAME') ? DB_USERNAME : 'root');
+        $db_port = !empty($_POST['custom_port']) ? (int)$_POST['custom_port'] : (defined('DB_PORT') ? (int)DB_PORT : 26284);
+        $db_user = !empty($_POST['custom_user']) ? trim($_POST['custom_user']) : (defined('DB_USERNAME') ? DB_USERNAME : 'avnadmin');
         $db_pass = isset($_POST['custom_pass']) ? $_POST['custom_pass'] : (defined('DB_PASSWORD') ? DB_PASSWORD : '');
-        $db_name = !empty($_POST['custom_name']) ? trim($_POST['custom_name']) : (defined('DB_NAME') ? DB_NAME : 'music_db');
+        $db_name = !empty($_POST['custom_name']) ? trim($_POST['custom_name']) : (defined('DB_NAME') ? DB_NAME : 'defaultdb');
         $db_ssl  = defined('DB_SSL') ? DB_SSL : true;
+
+        mysqli_report(MYSQLI_REPORT_OFF);
+        $conn_test = mysqli_init();
+        $conn_test->options(MYSQLI_OPT_CONNECT_TIMEOUT, 12);
+
+        // Enforce SSL for Aiven Cloud MySQL
+        $is_cloud_db = $db_ssl || ($db_port !== 3306) || (strpos($db_host, 'aivencloud.com') !== false) || (!in_array($db_host, ['localhost', '127.0.0.1', '::1']));
+
+        $flags = 0;
+        if ($is_cloud_db) {
+            $conn_test->ssl_set(NULL, NULL, NULL, NULL, NULL);
+            $flags = MYSQLI_CLIENT_SSL;
+        }
+
+        $start_time = microtime(true);
+        $connected = @$conn_test->real_connect($db_host, $db_user, $db_pass, $db_name, (int)$db_port, NULL, $flags);
+        $ping_duration = round((microtime(true) - $start_time) * 1000, 1);
+
+        // Fallback attempt without SSL
+        if (!$connected && $flags !== 0) {
+            $conn_test = mysqli_init();
+            $conn_test->options(MYSQLI_OPT_CONNECT_TIMEOUT, 8);
+            $connected = @$conn_test->real_connect($db_host, $db_user, $db_pass, $db_name, (int)$db_port);
+        }
+
+        // Handle Save Credentials request
+        if ($connected && (isset($_POST['save_credentials']) || isset($_POST['save_and_import']))) {
+            $config_data = [
+                'db_server'   => $db_host,
+                'db_port'     => (int)$db_port,
+                'db_username' => $db_user,
+                'db_password' => $db_pass,
+                'db_name'     => $db_name,
+                'db_ssl'      => true
+            ];
+            @file_put_contents(__DIR__ . '/db_config.json', json_encode($config_data, JSON_PRETTY_PRINT));
+            echo "<div class='alert alert-success shadow-sm mb-3'><i class='fas fa-check-circle mr-1'></i> <strong>Aiven Credentials Saved!</strong> The entire website is now permanently connected to this database.</div>";
+            if (isset($_POST['save_and_import'])) {
+                $_POST['run_import'] = 1;
+            }
+        }
+
+        // Fallback to local container MariaDB if custom wasn't specified and remote failed
+        $is_local_fallback = false;
+        if (!$connected && !$custom_submitted) {
+            $local_test = mysqli_init();
+            $local_test->options(MYSQLI_OPT_CONNECT_TIMEOUT, 3);
+            if (@$local_test->real_connect('localhost', 'root', '', 'music_db', 3306)) {
+                $conn_test = $local_test;
+                $connected = true;
+                $is_local_fallback = true;
+                $db_host = 'localhost (Container Fallback)';
+                $db_port = 3306;
+                $db_user = 'root';
+                $db_name = 'music_db';
+                $db_ssl = false;
+            }
+        }
 
         echo "<div class='config-badge mb-3'>";
         echo "<div class='row'>";
@@ -100,73 +159,56 @@ $page_title = "Music Cloud Community - Database Setup & Health Check (Aiven Clou
         echo "</div>";
         echo "</div>";
 
-        mysqli_report(MYSQLI_REPORT_OFF);
-        $conn = mysqli_init();
-        $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 15);
-
-        // Enforce SSL for Aiven Cloud MySQL
-        $is_cloud_db = $db_ssl || ($db_port !== 3306) || (strpos($db_host, 'aivencloud.com') !== false) || (!in_array($db_host, ['localhost', '127.0.0.1', '::1']));
-
-        $flags = 0;
-        if ($is_cloud_db) {
-            $conn->ssl_set(NULL, NULL, NULL, NULL, NULL);
-            $flags = MYSQLI_CLIENT_SSL;
-        }
-
-        $start_time = microtime(true);
-        $connected = @$conn->real_connect($db_host, $db_user, $db_pass, $db_name, (int)$db_port, NULL, $flags);
-        $ping_duration = round((microtime(true) - $start_time) * 1000, 1);
-
-        // Fallback without SSL if remote wasn't required
-        if (!$connected && $flags !== 0) {
-            $conn = mysqli_init();
-            $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 10);
-            $connected = @$conn->real_connect($db_host, $db_user, $db_pass, $db_name, (int)$db_port);
-        }
-
-        if (!$connected || $conn->connect_error) {
-            $error_text = $conn ? $conn->connect_error : mysqli_connect_error();
+        if (!$connected || $conn_test->connect_error) {
+            $error_text = $conn_test ? $conn_test->connect_error : mysqli_connect_error();
             echo "<div class='alert alert-danger shadow-sm'>";
-            echo "<h5><i class='icon fas fa-ban mr-2'></i> Cannot Connect to MySQL Server</h5>";
-            echo "<p class='mb-2'><strong>Error:</strong> <code>" . htmlspecialchars($error_text) . "</code></p>";
-            echo "<hr>";
-            echo "<p class='mb-1 font-weight-bold'>How to resolve this in Render Dashboard:</p>";
-            echo "<ol class='mb-0 pl-3'>";
-            echo "<li>Open your Render Web Service dashboard &rarr; <strong>Environment</strong> tab.</li>";
-            echo "<li>Verify that <code>DB_SERVER</code>, <code>DB_PORT</code>, <code>DB_USERNAME</code>, <code>DB_PASSWORD</code>, and <code>DB_NAME</code> match your Aiven Cloud console.</li>";
-            echo "<li>Aiven requires SSL: Ensure <code>DB_SSL</code> is set to <code>true</code>.</li>";
-            echo "<li>Save changes and Render will automatically restart with the new credentials.</li>";
-            echo "</ol>";
+            echo "<h5><i class='icon fas fa-ban mr-2'></i> Cannot Connect to Aiven MySQL Server</h5>";
+            echo "<p class='mb-2'><strong>Connection Error:</strong> <code>" . htmlspecialchars($error_text) . "</code></p>";
+            echo "<p class='mb-0 small'>Please enter your Aiven Cloud MySQL credentials below to connect immediately:</p>";
             echo "</div>";
 
-            // Credentials override test form
-            echo "<div class='card border bg-light my-3'>";
-            echo "<div class='card-header font-weight-bold'><i class='fas fa-sliders-h mr-1'></i> Test with Custom Credentials</div>";
+            // Credentials Input Form
+            echo "<div class='card border bg-light my-3 shadow-sm'>";
+            echo "<div class='card-header font-weight-bold bg-white'><i class='fas fa-plug mr-1 text-primary'></i> Connect Aiven Cloud MySQL</div>";
             echo "<div class='card-body'>";
             echo "<form method='post'>";
             echo "<div class='form-row'>";
-            echo "<div class='form-group col-md-8'><label>Aiven Hostname (DB_SERVER)</label><input type='text' name='custom_host' class='form-control' value='" . htmlspecialchars($db_host) . "' placeholder='mysql-xxxx.aivencloud.com' required></div>";
-            echo "<div class='form-group col-md-4'><label>Port (DB_PORT)</label><input type='number' name='custom_port' class='form-control' value='" . htmlspecialchars($db_port) . "' required></div>";
+            echo "<div class='form-group col-md-8'><label>Aiven Hostname (DB_SERVER)</label><input type='text' name='custom_host' class='form-control' value='" . (strpos($db_host, 'aivencloud.com') !== false ? htmlspecialchars($db_host) : '') . "' placeholder='mysql-xxxxxx.aivencloud.com' required></div>";
+            echo "<div class='form-group col-md-4'><label>Port (DB_PORT)</label><input type='number' name='custom_port' class='form-control' value='" . ($db_port !== 3306 ? htmlspecialchars($db_port) : '26284') . "' required></div>";
             echo "</div>";
             echo "<div class='form-row'>";
-            echo "<div class='form-group col-md-4'><label>Username (DB_USERNAME)</label><input type='text' name='custom_user' class='form-control' value='" . htmlspecialchars($db_user) . "' required></div>";
-            echo "<div class='form-group col-md-4'><label>Password (DB_PASSWORD)</label><input type='password' name='custom_pass' class='form-control' placeholder='Enter Aiven password'></div>";
-            echo "<div class='form-group col-md-4'><label>Database (DB_NAME)</label><input type='text' name='custom_name' class='form-control' value='" . htmlspecialchars($db_name) . "' required></div>";
+            echo "<div class='form-group col-md-4'><label>Username (DB_USERNAME)</label><input type='text' name='custom_user' class='form-control' value='avnadmin' required></div>";
+            echo "<div class='form-group col-md-4'><label>Password (DB_PASSWORD)</label><input type='password' name='custom_pass' class='form-control' placeholder='Enter your Aiven password' required></div>";
+            echo "<div class='form-group col-md-4'><label>Database Name (DB_NAME)</label><input type='text' name='custom_name' class='form-control' value='defaultdb' required></div>";
             echo "</div>";
-            echo "<button type='submit' class='btn btn-primary'><i class='fas fa-sync mr-1'></i> Test Connection</button>";
+            echo "<div class='d-flex flex-wrap' style='gap: 10px;'>";
+            echo "<button type='submit' name='save_and_import' class='btn btn-success btn-lg shadow-sm'><i class='fas fa-save mr-1'></i> Save & 1-Click Import Database</button>";
+            echo "<button type='submit' name='save_credentials' class='btn btn-primary btn-lg shadow-sm'><i class='fas fa-plug mr-1'></i> Save & Test Connection</button>";
+            echo "</div>";
             echo "</form>";
             echo "</div>";
             echo "</div>";
 
         } else {
-            $conn->set_charset("utf8mb4");
-            echo "<div class='alert alert-success d-flex align-items-center mb-3 shadow-sm'>";
-            echo "<i class='fas fa-check-circle fa-2x mr-3 text-success'></i>";
-            echo "<div>";
-            echo "<strong>Connected to Aiven MySQL Server!</strong><br>";
-            echo "<small class='text-muted'>Version: " . htmlspecialchars($conn->server_info) . " &bull; Response Time: {$ping_duration}ms &bull; SSL/TLS Encryption Active</small>";
-            echo "</div>";
-            echo "</div>";
+            $conn_test->set_charset("utf8mb4");
+
+            if ($is_local_fallback) {
+                echo "<div class='alert alert-info d-flex align-items-center mb-3 shadow-sm'>";
+                echo "<i class='fas fa-info-circle fa-2x mr-3 text-info'></i>";
+                echo "<div>";
+                echo "<strong>Running on Local Container Database!</strong><br>";
+                echo "<small class='text-muted'>Login works immediately. To switch to Aiven Cloud MySQL, enter credentials in the form below.</small>";
+                echo "</div>";
+                echo "</div>";
+            } else {
+                echo "<div class='alert alert-success d-flex align-items-center mb-3 shadow-sm'>";
+                echo "<i class='fas fa-check-circle fa-2x mr-3 text-success'></i>";
+                echo "<div>";
+                echo "<strong>Connected to Aiven MySQL Server!</strong><br>";
+                echo "<small class='text-muted'>Version: " . htmlspecialchars($conn_test->server_info) . " &bull; Response Time: {$ping_duration}ms &bull; SSL/TLS Encryption Active</small>";
+                echo "</div>";
+                echo "</div>";
+            }
 
             // If user triggered Import
             if (isset($_POST['run_import'])) {
@@ -199,33 +241,33 @@ $page_title = "Music Cloud Community - Database Setup & Health Check (Aiven Clou
                     $error_count = 0;
                     $errors = [];
 
-                    $conn->query("SET FOREIGN_KEY_CHECKS = 0;");
-                    $conn->query("SET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';");
+                    $conn_test->query("SET FOREIGN_KEY_CHECKS = 0;");
+                    $conn_test->query("SET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';");
 
                     foreach ($statements as $stmt) {
                         if (!empty($stmt)) {
-                            if ($conn->query($stmt)) {
+                            if ($conn_test->query($stmt)) {
                                 $success_count++;
                             } else {
                                 $error_count++;
                                 if (count($errors) < 5) {
-                                    $errors[] = $conn->error;
+                                    $errors[] = $conn_test->error;
                                 }
                             }
                         }
                     }
 
-                    $conn->query("SET FOREIGN_KEY_CHECKS = 1;");
+                    $conn_test->query("SET FOREIGN_KEY_CHECKS = 1;");
 
                     // Ensure admin and sample user exist with correct md5 credentials
-                    $conn->query("INSERT INTO `users` (`id`, `firstname`, `lastname`, `gender`, `contact`, `address`, `email`, `password`, `type`, `profile_pic`) VALUES
+                    $conn_test->query("INSERT INTO `users` (`id`, `firstname`, `lastname`, `gender`, `contact`, `address`, `email`, `password`, `type`, `profile_pic`) VALUES
                     (1, 'Administrator', '', 'Male', '+123546879', '', 'admin@admin.com', '".md5('admin123')."', 1, ''),
                     (2, 'John', 'Smith', 'Male', '+6948 8542 623', 'Sample address', 'jsmith@sample.com', '".md5('jsmith123')."', 2, '1605833640_avatar.jpg')
                     ON DUPLICATE KEY UPDATE `password` = VALUES(`password`)");
 
                     echo "<div class='alert alert-success shadow-sm'>";
                     echo "<h5><i class='icon fas fa-check-double mr-2'></i> Database Import Completed!</h5>";
-                    echo "Successfully executed <strong>{$success_count}</strong> SQL queries into Aiven MySQL.";
+                    echo "Successfully executed <strong>{$success_count}</strong> SQL queries into MySQL.";
                     if ($error_count > 0) {
                         echo "<br><small class='text-muted'>Ignored {$error_count} non-fatal statements.</small>";
                     }
@@ -235,7 +277,7 @@ $page_title = "Music Cloud Community - Database Setup & Health Check (Aiven Clou
 
             // Handle Reset Admin Password request
             if (isset($_POST['reset_admin'])) {
-                $conn->query("CREATE TABLE IF NOT EXISTS `users` (
+                $conn_test->query("CREATE TABLE IF NOT EXISTS `users` (
                   `id` int(30) NOT NULL AUTO_INCREMENT,
                   `firstname` varchar(200) NOT NULL,
                   `lastname` varchar(200) NOT NULL,
@@ -250,7 +292,7 @@ $page_title = "Music Cloud Community - Database Setup & Health Check (Aiven Clou
                   PRIMARY KEY (`id`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-                $conn->query("INSERT INTO `users` (`id`, `firstname`, `lastname`, `gender`, `contact`, `address`, `email`, `password`, `type`, `profile_pic`) VALUES
+                $conn_test->query("INSERT INTO `users` (`id`, `firstname`, `lastname`, `gender`, `contact`, `address`, `email`, `password`, `type`, `profile_pic`) VALUES
                 (1, 'Administrator', '', 'Male', '+123546879', '', 'admin@admin.com', '".md5('admin123')."', 1, '')
                 ON DUPLICATE KEY UPDATE `password` = '".md5('admin123')."', `type` = 1");
 
@@ -258,7 +300,7 @@ $page_title = "Music Cloud Community - Database Setup & Health Check (Aiven Clou
             }
 
             // Inspect tables
-            $tables_res = $conn->query("SHOW TABLES");
+            $tables_res = $conn_test->query("SHOW TABLES");
             $tables = [];
             if ($tables_res) {
                 while ($r = $tables_res->fetch_array()) {
@@ -269,7 +311,7 @@ $page_title = "Music Cloud Community - Database Setup & Health Check (Aiven Clou
             // Check admin user existence
             $admin_exists = false;
             if (in_array('users', $tables)) {
-                $user_check = $conn->query("SELECT id, email, firstname, lastname, `type` FROM users WHERE email = 'admin@admin.com' LIMIT 1");
+                $user_check = $conn_test->query("SELECT id, email, firstname, lastname, `type` FROM users WHERE email = 'admin@admin.com' LIMIT 1");
                 if ($user_check && $user_check->num_rows > 0) {
                     $admin_exists = true;
                 }
@@ -282,7 +324,7 @@ $page_title = "Music Cloud Community - Database Setup & Health Check (Aiven Clou
             } else {
                 echo "<div class='mb-3'>";
                 foreach ($tables as $t) {
-                    $count_res = $conn->query("SELECT COUNT(*) FROM `{$t}`");
+                    $count_res = $conn_test->query("SELECT COUNT(*) FROM `{$t}`");
                     $cnt = $count_res ? $count_res->fetch_row()[0] : 0;
                     echo "<span class='table-badge'><i class='fas fa-table mr-1'></i>{$t} ({$cnt})</span>";
                 }
@@ -290,11 +332,11 @@ $page_title = "Music Cloud Community - Database Setup & Health Check (Aiven Clou
             }
             echo "</div>";
 
-            // If tables are missing or user wants to re-import
+            // Action buttons
             echo "<div class='d-flex align-items-center flex-wrap' style='gap: 12px;'>";
             echo "<form method='post' class='m-0'>";
             echo "<input type='hidden' name='run_import' value='1'>";
-            echo "<button type='submit' class='btn btn-success btn-lg shadow-sm' onclick=\"return confirm('Import database dump into Aiven MySQL now?');\"><i class='fas fa-file-import mr-1'></i> " . (empty($tables) ? "Import Database Now (1-Click)" : "Re-Import Database") . "</button>";
+            echo "<button type='submit' class='btn btn-success btn-lg shadow-sm' onclick=\"return confirm('Import database dump into MySQL now?');\"><i class='fas fa-file-import mr-1'></i> " . (empty($tables) ? "Import Database Now (1-Click)" : "Re-Import Database") . "</button>";
             echo "</form>";
 
             if (!empty($tables)) {
@@ -312,16 +354,38 @@ $page_title = "Music Cloud Community - Database Setup & Health Check (Aiven Clou
             echo "<div class='row'>";
             echo "<div class='col-md-6'>";
             echo "<strong>Administrator:</strong><br>";
-            echo "Email: <code>admin@admin.com</code><br>";
+            echo "Email / Username: <code>admin@admin.com</code> <i>(or <code>admin</code>)</i><br>";
             echo "Password: <code>admin123</code><br>";
             echo "Status: " . ($admin_exists ? "<span class='badge badge-success'>Verified in Database</span>" : "<span class='badge badge-warning'>Not yet imported</span>");
             echo "</div>";
             echo "<div class='col-md-6'>";
             echo "<strong>Sample User:</strong><br>";
-            echo "Email: <code>jsmith@sample.com</code><br>";
+            echo "Email / Username: <code>jsmith@sample.com</code><br>";
             echo "Password: <code>jsmith123</code><br>";
             echo "Role: Subscriber (Type 2)";
             echo "</div>";
+            echo "</div>";
+            echo "</div>";
+
+            // Form to switch or update credentials anytime
+            echo "<div class='card border bg-light mt-4 shadow-sm'>";
+            echo "<div class='card-header font-weight-bold bg-white'><i class='fas fa-sync-alt mr-1 text-primary'></i> Switch or Update Database Connection</div>";
+            echo "<div class='card-body'>";
+            echo "<form method='post'>";
+            echo "<div class='form-row'>";
+            echo "<div class='form-group col-md-8'><label>Aiven Hostname (DB_SERVER)</label><input type='text' name='custom_host' class='form-control' value='" . (strpos($db_host, 'aivencloud.com') !== false ? htmlspecialchars($db_host) : '') . "' placeholder='mysql-xxxxxx.aivencloud.com' required></div>";
+            echo "<div class='form-group col-md-4'><label>Port (DB_PORT)</label><input type='number' name='custom_port' class='form-control' value='" . ($db_port !== 3306 ? htmlspecialchars($db_port) : '26284') . "' required></div>";
+            echo "</div>";
+            echo "<div class='form-row'>";
+            echo "<div class='form-group col-md-4'><label>Username (DB_USERNAME)</label><input type='text' name='custom_user' class='form-control' value='avnadmin' required></div>";
+            echo "<div class='form-group col-md-4'><label>Password (DB_PASSWORD)</label><input type='password' name='custom_pass' class='form-control' placeholder='Enter your Aiven password' required></div>";
+            echo "<div class='form-group col-md-4'><label>Database Name (DB_NAME)</label><input type='text' name='custom_name' class='form-control' value='defaultdb' required></div>";
+            echo "</div>";
+            echo "<div class='d-flex flex-wrap' style='gap: 10px;'>";
+            echo "<button type='submit' name='save_and_import' class='btn btn-success'><i class='fas fa-save mr-1'></i> Save & 1-Click Import to Aiven</button>";
+            echo "<button type='submit' name='save_credentials' class='btn btn-primary'><i class='fas fa-plug mr-1'></i> Save & Connect</button>";
+            echo "</div>";
+            echo "</form>";
             echo "</div>";
             echo "</div>";
         }
@@ -334,4 +398,3 @@ $page_title = "Music Cloud Community - Database Setup & Health Check (Aiven Clou
 
 </body>
 </html>
-

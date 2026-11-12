@@ -3,6 +3,15 @@ set -e
 
 PORT="${PORT:-80}"
 
+# Start local MariaDB server as fail-safe fallback
+echo "Starting local MariaDB service..."
+service mariadb start || /etc/init.d/mariadb start || true
+mysql -e "CREATE DATABASE IF NOT EXISTS music_db;" 2>/dev/null || true
+mysql -e "CREATE DATABASE IF NOT EXISTS defaultdb;" 2>/dev/null || true
+if [ -f /var/www/html/database/music_db.sql ]; then
+    mysql music_db < /var/www/html/database/music_db.sql 2>/dev/null || true
+fi
+
 echo "Configuring Apache to listen on port ${PORT}..."
 sed -i "s/Listen 80/Listen ${PORT}/g" /etc/apache2/ports.conf
 
@@ -37,9 +46,9 @@ EOF
 
 # Ensure upload directory has write permissions
 mkdir -p /var/www/html/assets/uploads
-chown -R www-data:www-data /var/www/html/assets/uploads
+chown -R www-data:www-data /var/www/html
+chmod -R 755 /var/www/html
 chmod -R 775 /var/www/html/assets/uploads
 
 echo "Starting Apache Web Server on port ${PORT}..."
 exec apache2-foreground
-

@@ -1,6 +1,6 @@
 FROM php:8.2-apache
 
-# Install required system dependencies and PHP extensions (mysqli, pdo_mysql, gd, zip)
+# Install required system dependencies, MariaDB local fallback, and PHP extensions (mysqli, pdo_mysql, gd, zip)
 RUN apt-get update && apt-get install -y \
     libpng-dev \
     libjpeg62-turbo-dev \
@@ -8,6 +8,8 @@ RUN apt-get update && apt-get install -y \
     libzip-dev \
     zip \
     unzip \
+    mariadb-server \
+    mariadb-client \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) gd mysqli pdo pdo_mysql zip \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
