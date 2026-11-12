@@ -1,0 +1,5 @@
+*.original
+.env
+.DS_Store
+Thumbs.db
+music/

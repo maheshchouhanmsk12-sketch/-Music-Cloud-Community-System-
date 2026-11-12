@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: music-cloud-community
+    env: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: DB_SERVER
+        sync: false
+      - key: DB_PORT
+        sync: false
+        value: "26284"
+      - key: DB_USERNAME
+        sync: false
+        value: avnadmin
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
+        value: defaultdb
+      - key: DB_SSL
+        sync: false
+        value: "true"
+      - key: BASE_URL
+        sync: false

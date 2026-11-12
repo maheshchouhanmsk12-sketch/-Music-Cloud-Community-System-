@@ -1,0 +1,10 @@
+<IfModule mod_rewrite.c>
+Header set Access-Control-Allow-Origin "*"
+RewriteEngine on
+
+# Fix directory trailing slash redirects behind reverse proxy without appending internal port
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteCond %{REQUEST_URI} !/$
+RewriteCond %{HTTP_HOST} ^([^:]+)
+RewriteRule ^(.*)$ https://%1/$1/ [R=301,L]
+</IfModule>
