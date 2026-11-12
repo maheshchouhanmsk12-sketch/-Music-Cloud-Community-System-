@@ -42,3 +42,4 @@ chmod -R 775 /var/www/html/assets/uploads
 
 echo "Starting Apache Web Server on port ${PORT}..."
 exec apache2-foreground
+

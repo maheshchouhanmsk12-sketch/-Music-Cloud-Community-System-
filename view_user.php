@@ -1,11 +1,24 @@
-<?php include 'db_connect.php' ?>
+<?php include_once 'db_connect.php' ?>
 <?php
+$name = "";
+$email = "";
+$contact = "";
+$address = "";
+$type = 2;
+$profile_pic = "";
+$firstname = "";
+$lastname = "";
 if(isset($_GET['id'])){
 	$type_arr = array('',"Admin","Subscriber");
-	$qry = $conn->query("SELECT *,concat(firstname,' ',lastname) as name FROM users where id = ".$_GET['id'])->fetch_array();
-foreach($qry as $k => $v){
-	$$k = $v;
-}
+	$uid = (int)$_GET['id'];
+	if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
+		$res = $conn->query("SELECT *,concat(firstname,' ',lastname) as name FROM users where id = ".$uid);
+		if ($res && $res instanceof mysqli_result && ($qry = $res->fetch_array())) {
+			foreach($qry as $k => $v){
+				$$k = $v;
+			}
+		}
+	}
 }
 ?>
 <div class="container-fluid">

@@ -1,9 +1,16 @@
-<?php session_start() ?>
-<?php include 'db_connect.php'; ?>
 <?php 
-$qry = $conn->query("SELECT * FROM users where id = ".$_SESSION['login_id'])->fetch_array();
-foreach($qry as $k => $v){
-	$$k = $v;
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+include_once 'db_connect.php';
+$login_id = isset($_SESSION['login_id']) ? (int)$_SESSION['login_id'] : 0;
+if ($login_id > 0 && isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
+    $res = $conn->query("SELECT * FROM users where id = ".$login_id);
+    if ($res && $res instanceof mysqli_result && ($qry = $res->fetch_array())) {
+        foreach($qry as $k => $v){
+            $$k = $v;
+        }
+    }
 }
 ?>
 <div class="container-fluid">

@@ -33,3 +33,4 @@ RUN mkdir -p /var/www/html/assets/uploads \
 EXPOSE 80 10000
 
 CMD ["/usr/local/bin/start.sh"]
+

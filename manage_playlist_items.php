@@ -1,9 +1,11 @@
-<?php session_start() ?>
 <?php 
-include 'db_connect.php';
-$items = $conn->query("SELECT p.*,m.title,m.artist,m.upath FROM playlist_items p inner join uploads m on m.id = p.music_id where p.playlist_id ={$_GET['pid']} ");
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+include_once 'db_connect.php';
+$pid = isset($_GET['pid']) ? (int)$_GET['pid'] : 0;
+$items = (isset($conn) && $conn instanceof mysqli && !$conn->connect_error && $pid > 0) ? $conn->query("SELECT p.*,m.title,m.artist,m.upath FROM playlist_items p inner join uploads m on m.id = p.music_id where p.playlist_id = {$pid} ") : false;
 ?>
-<?php include 'db_connect.php'; ?>
 <div class="container-fluid">
 	<form action="" id="manage_playlist_items">
 	<input type="hidden" name="playlist_id" value="<?php echo $_GET['pid'] ?>">

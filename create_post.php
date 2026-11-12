@@ -1,5 +1,9 @@
-<?php session_start() ?>
-<?php include 'db_connect.php' ?>
+<?php 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+include_once 'db_connect.php';
+?>
 <style>
 	.column {
 	  float: left;

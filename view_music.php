@@ -1,10 +1,23 @@
 <?php
-include 'db_connect.php';
-$qry = $conn->query("SELECT u.*,g.genre FROM uploads u inner join genres g on g.id = u.genre_id where u.id = ".$_GET['id'])->fetch_array();
-foreach($qry as $k => $v){
-	if($k=='title')
-		$k = 'mtitle';
-	$$k = $v;
+include_once 'db_connect.php';
+$mtitle = "";
+$artist = "";
+$genre = "";
+$description = "";
+$cover_image = "default_cover.jpg";
+$upath = "";
+if (isset($_GET['id'])) {
+	$mid = (int)$_GET['id'];
+	if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
+		$res = $conn->query("SELECT u.*,g.genre FROM uploads u inner join genres g on g.id = u.genre_id where u.id = ".$mid);
+		if ($res && $res instanceof mysqli_result && ($qry = $res->fetch_array())) {
+			foreach($qry as $k => $v){
+				if($k=='title')
+					$k = 'mtitle';
+				$$k = $v;
+			}
+		}
+	}
 }
 ?>
 <div class="col-lg-12">

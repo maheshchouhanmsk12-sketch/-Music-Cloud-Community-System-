@@ -1,10 +1,20 @@
 <?php
-include 'db_connect.php';
-$qry = $conn->query("SELECT * FROM genres where id = ".$_GET['id'])->fetch_array();
-foreach($qry as $k => $v){
-	if($k=='title')
-		$k = 'ptitle';
-	$$k = $v;
+include_once 'db_connect.php';
+$genre = "";
+$description = "";
+$cover_photo = "default_cover.jpg";
+if (isset($_GET['id'])) {
+	$gid = (int)$_GET['id'];
+	if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
+		$res = $conn->query("SELECT * FROM genres where id = ".$gid);
+		if ($res && $res instanceof mysqli_result && ($qry = $res->fetch_array())) {
+			foreach($qry as $k => $v){
+				if($k=='title')
+					$k = 'ptitle';
+				$$k = $v;
+			}
+		}
+	}
 }
 ?>
 

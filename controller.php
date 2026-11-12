@@ -1,3 +1,8 @@
+<?php 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+?>
 <div class="container-fluid">
         <div class="row mb-2">
           <div class="col-sm-6">
@@ -11,9 +16,12 @@
             <hr class="border-primary">
       </div><!-- /.container-fluid -->
 <?php 
-session_start();
-include $_GET['page'].'.php';
-
+$page = isset($_GET['page']) ? $_GET['page'] : 'home';
+if (file_exists($page . '.php')) {
+    include $page . '.php';
+} else {
+    include '404.html';
+}
 ?>
 <script>
 	$(function () {
