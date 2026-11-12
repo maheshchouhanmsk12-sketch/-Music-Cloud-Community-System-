@@ -6,9 +6,10 @@ $action = $_GET['action'];
 include 'admin_class.php';
 $crud = new Action();
 if($action == 'login'){
+	if (ob_get_length()) ob_clean();
 	$login = $crud->login();
-	if($login)
-		echo $login;
+	echo $login;
+	exit;
 }
 if($action == 'login2'){
 	$login = $crud->login2();

@@ -72,16 +72,23 @@ if(isset($_SESSION['login_id'])) {
   					<?php endif; ?>
   					<form id="login-form" >
   						<div class="form-group">
-  							<input type="text" id="email" name="email" class="form-control" placeholder="Email">
+  							<label class="control-label text-muted small mb-1"><i class="fas fa-user mr-1"></i> Email or Username</label>
+  							<input type="text" id="email" name="email" class="form-control" placeholder="admin@admin.com or admin" required>
   						</div>
   						<div class="form-group">
-  							<input type="password" id="password" name="password" class="form-control" placeholder="Password">
+  							<label class="control-label text-muted small mb-1"><i class="fas fa-lock mr-1"></i> Password</label>
+  							<input type="password" id="password" name="password" class="form-control" placeholder="admin123" required>
   						</div>
   						<center><button class="btn btn-block btn-wave btn-primary bg-gradient-primary">Login</button></center>
   						<hr>
 
   						<center><button class="btn btn-block btn-wave btn-success bg-gradient-success" type="button" id="new_account">Create New Account</button></center>
   					</form>
+  					<div class="alert alert-info py-2 px-3 mt-3 text-left shadow-sm" style="font-size: 13px; border-left: 4px solid #17a2b8;">
+  						<strong><i class="fas fa-key mr-1 text-info"></i> Default Login Credentials:</strong><br>
+  						&bull; <b>Admin:</b> <code>admin@admin.com</code> <i>(or <code>admin</code>)</i> | Pass: <code>admin123</code><br>
+  						&bull; <b>Subscriber:</b> <code>jsmith@sample.com</code> | Pass: <code>jsmith123</code>
+  					</div>
   				</div>
   			</div>
   		</div>
@@ -229,13 +236,18 @@ if(isset($_SESSION['login_id'])) {
 			data:$(this).serialize(),
 			error:err=>{
 				console.log(err)
+				$('#login-form').prepend('<div class="alert alert-danger">An unexpected network or server error occurred. Please try again.</div>')
 				end_load()
 			},
 			success:function(resp){
-				if(resp == 1){
+				var clean_resp = resp ? resp.toString().trim() : '';
+				if(clean_resp == '1'){
 					location.href ='index.php?page=home';
+				}else if(clean_resp == 'db_error'){
+					$('#login-form').prepend('<div class="alert alert-danger"><strong>Database Connection Error!</strong> Please verify Aiven Cloud credentials or open <a href="db_setup.php" class="font-weight-bold"><u>db_setup.php</u></a>.</div>')
+					end_load()
 				}else{
-					$('#login-form').prepend('<div class="alert alert-danger">Username or password is incorrect.</div>')
+					$('#login-form').prepend('<div class="alert alert-danger">Username or password is incorrect.<br><small>Default Admin: <b>admin@admin.com</b> (or <b>admin</b>) | Password: <b>admin123</b></small></div>')
 					end_load()
 				}
 			}

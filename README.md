@@ -1,5 +1,11 @@
 # 🎵 Music Cloud Community System (MCCS)
 
+> [!IMPORTANT]
+> ### 🔑 Default Login Credentials & Access:
+> - **Admin Login:** Email: `admin@admin.com` *(or Username: `admin`)* | Password: `admin123`
+> - **User Login:** Email: `jsmith@sample.com` *(or Username: `jsmith`)* | Password: `jsmith123`
+> - **1-Click DB Importer & Reset Tool:** Open `https://<your-render-url>/db_setup.php` to import tables or reset password anytime.
+
 Production-ready, Dockerized web application built with **PHP 8.2**, **Apache**, **Aiven Cloud MySQL**, and **AdminLTE 3**, optimized for high-performance deployment on **Render**.
 
 ---

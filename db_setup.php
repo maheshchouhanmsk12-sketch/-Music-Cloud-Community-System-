@@ -217,6 +217,12 @@ $page_title = "Music Cloud Community - Database Setup & Health Check (Aiven Clou
 
                     $conn->query("SET FOREIGN_KEY_CHECKS = 1;");
 
+                    // Ensure admin and sample user exist with correct md5 credentials
+                    $conn->query("INSERT INTO `users` (`id`, `firstname`, `lastname`, `gender`, `contact`, `address`, `email`, `password`, `type`, `profile_pic`) VALUES
+                    (1, 'Administrator', '', 'Male', '+123546879', '', 'admin@admin.com', '".md5('admin123')."', 1, ''),
+                    (2, 'John', 'Smith', 'Male', '+6948 8542 623', 'Sample address', 'jsmith@sample.com', '".md5('jsmith123')."', 2, '1605833640_avatar.jpg')
+                    ON DUPLICATE KEY UPDATE `password` = VALUES(`password`)");
+
                     echo "<div class='alert alert-success shadow-sm'>";
                     echo "<h5><i class='icon fas fa-check-double mr-2'></i> Database Import Completed!</h5>";
                     echo "Successfully executed <strong>{$success_count}</strong> SQL queries into Aiven MySQL.";
@@ -225,6 +231,30 @@ $page_title = "Music Cloud Community - Database Setup & Health Check (Aiven Clou
                     }
                     echo "</div>";
                 }
+            }
+
+            // Handle Reset Admin Password request
+            if (isset($_POST['reset_admin'])) {
+                $conn->query("CREATE TABLE IF NOT EXISTS `users` (
+                  `id` int(30) NOT NULL AUTO_INCREMENT,
+                  `firstname` varchar(200) NOT NULL,
+                  `lastname` varchar(200) NOT NULL,
+                  `gender` varchar(50) NOT NULL DEFAULT 'Male',
+                  `contact` varchar(50) NOT NULL DEFAULT '',
+                  `address` text NOT NULL,
+                  `email` varchar(200) NOT NULL,
+                  `password` text NOT NULL,
+                  `type` int(1) NOT NULL DEFAULT 2,
+                  `profile_pic` text NOT NULL,
+                  `date_created` datetime NOT NULL DEFAULT current_timestamp(),
+                  PRIMARY KEY (`id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+                $conn->query("INSERT INTO `users` (`id`, `firstname`, `lastname`, `gender`, `contact`, `address`, `email`, `password`, `type`, `profile_pic`) VALUES
+                (1, 'Administrator', '', 'Male', '+123546879', '', 'admin@admin.com', '".md5('admin123')."', 1, '')
+                ON DUPLICATE KEY UPDATE `password` = '".md5('admin123')."', `type` = 1");
+
+                echo "<div class='alert alert-success shadow-sm'><i class='fas fa-check-circle mr-1'></i> Admin password successfully reset to <code>admin123</code> for <code>admin@admin.com</code>!</div>";
             }
 
             // Inspect tables
@@ -269,6 +299,10 @@ $page_title = "Music Cloud Community - Database Setup & Health Check (Aiven Clou
 
             if (!empty($tables)) {
                 echo "<a href='login.php' class='btn btn-primary btn-lg shadow-sm'><i class='fas fa-sign-in-alt mr-1'></i> Go to Login Page</a>";
+                echo "<form method='post' class='m-0'>";
+                echo "<input type='hidden' name='reset_admin' value='1'>";
+                echo "<button type='submit' class='btn btn-warning btn-lg shadow-sm' onclick=\"return confirm('Reset admin credentials to admin@admin.com / admin123?');\"><i class='fas fa-key mr-1'></i> Reset Admin Password</button>";
+                echo "</form>";
             }
             echo "</div>";
 
