@@ -17,9 +17,6 @@ Class Action {
 	}
 
 	function __destruct() {
-		if ($this->db && $this->db instanceof mysqli) {
-			@$this->db->close();
-		}
 		if (ob_get_level() > 0) {
 			@ob_end_flush();
 		}

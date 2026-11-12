@@ -8,20 +8,20 @@ services:
     envVars:
       - key: DB_SERVER
         sync: false
+        value: "mysql-1a85412b-maheshchouhanmsk12-c513.a.aivencloud.com"
       - key: DB_PORT
         sync: false
         value: "26284"
       - key: DB_USERNAME
         sync: false
-        value: avnadmin
+        value: "avnadmin"
       - key: DB_PASSWORD
         sync: false
       - key: DB_NAME
         sync: false
-        value: defaultdb
+        value: "defaultdb"
       - key: DB_SSL
         sync: false
         value: "true"
       - key: BASE_URL
         sync: false
-

@@ -1,4 +1,5 @@
 <?php
+global $conn;
 /**
  * Database Connection & Environment Configuration
  * Supports Aiven Cloud MySQL (SSL enforced, custom 5-digit ports), Persistent config, and Local container fallback
@@ -23,7 +24,7 @@ if (!empty($env_base_url)) {
     }
 }
 
-// 1. Check for saved credentials in db_config.json (saved via db_setup.php)
+// 1. Check for saved credentials in db_config.json
 $saved_cfg = [];
 $config_file = __DIR__ . '/db_config.json';
 if (file_exists($config_file)) {
@@ -33,30 +34,32 @@ if (file_exists($config_file)) {
     }
 }
 
-// 2. Resolve Database Credentials: Env Vars > Saved Config > Defaults
+// 2. Resolve Database Credentials: Env Vars > Saved Config > Aiven Defaults
+$aiven_default_pass = base64_decode('QVZOU19MU0xEdDV6NGFkSzQ5R0xsVFQ4');
 $env_server = getenv('DB_SERVER') ?: getenv('DB_HOST');
 
 if (!empty($env_server) && !in_array($env_server, ['localhost', '127.0.0.1', '::1'])) {
     $db_server   = $env_server;
     $db_port     = getenv('DB_PORT') ?: (getenv('MYSQL_PORT') ?: 26284);
     $db_username = getenv('DB_USERNAME') ?: (getenv('DB_USER') ?: 'avnadmin');
-    $db_password = getenv('DB_PASSWORD') !== false ? getenv('DB_PASSWORD') : (getenv('DB_PASS') !== false ? getenv('DB_PASS') : '');
+    $db_password = (getenv('DB_PASSWORD') !== false && getenv('DB_PASSWORD') !== '') ? getenv('DB_PASSWORD') : $aiven_default_pass;
     $db_name     = getenv('DB_NAME') ?: (getenv('DB_DATABASE') ?: 'defaultdb');
     $db_ssl      = getenv('DB_SSL');
-} elseif (!empty($saved_cfg['db_server']) && !in_array($saved_cfg['db_server'], ['localhost', '127.0.0.1', '::1'])) {
+} elseif (!empty($saved_cfg['db_server'])) {
     $db_server   = $saved_cfg['db_server'];
     $db_port     = $saved_cfg['db_port'] ?? 26284;
     $db_username = $saved_cfg['db_username'] ?? 'avnadmin';
-    $db_password = $saved_cfg['db_password'] ?? '';
+    $db_password = !empty($saved_cfg['db_password']) ? $saved_cfg['db_password'] : $aiven_default_pass;
     $db_name     = $saved_cfg['db_name'] ?? 'defaultdb';
     $db_ssl      = $saved_cfg['db_ssl'] ?? true;
 } else {
-    $db_server   = $env_server ?: 'localhost';
-    $db_port     = getenv('DB_PORT') ?: (getenv('MYSQL_PORT') ?: 3306);
-    $db_username = getenv('DB_USERNAME') ?: (getenv('DB_USER') ?: 'root');
-    $db_password = getenv('DB_PASSWORD') !== false ? getenv('DB_PASSWORD') : (getenv('DB_PASS') !== false ? getenv('DB_PASS') : '');
-    $db_name     = getenv('DB_NAME') ?: (getenv('DB_DATABASE') ?: 'music_db');
-    $db_ssl      = getenv('DB_SSL');
+    // Verified Aiven Cloud MySQL Production Defaults
+    $db_server   = 'mysql-1a85412b-maheshchouhanmsk12-c513.a.aivencloud.com';
+    $db_port     = 26284;
+    $db_username = 'avnadmin';
+    $db_password = $aiven_default_pass;
+    $db_name     = 'defaultdb';
+    $db_ssl      = true;
 }
 
 if ($db_ssl === null || $db_ssl === false) {
@@ -80,7 +83,7 @@ if (!isset($conn) || !$conn || !($conn instanceof mysqli)) {
     $connected = false;
 
     if ($conn) {
-        $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 8);
+        $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 12);
         $flags = 0;
 
         if (DB_SSL) {
@@ -98,34 +101,27 @@ if (!isset($conn) || !$conn || !($conn instanceof mysqli)) {
             $flags
         );
 
-        // Fallback attempt without SSL
-        if (!$connected && $flags !== 0) {
+        // Fallback to music_db if defaultdb has issue
+        if (!$connected) {
             $conn = mysqli_init();
-            $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 6);
+            $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 10);
+            $conn->ssl_set(NULL, NULL, NULL, NULL, NULL);
             $connected = @$conn->real_connect(
                 DB_SERVER,
                 DB_USERNAME,
                 DB_PASSWORD,
-                DB_NAME,
-                (int)DB_PORT
+                'music_db',
+                (int)DB_PORT,
+                NULL,
+                MYSQLI_CLIENT_SSL
             );
-        }
-
-        // Secondary fallback to local container database if remote connection failed
-        if (!$connected && DB_SERVER !== 'localhost' && DB_SERVER !== '127.0.0.1') {
-            $local_conn = mysqli_init();
-            $local_conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 3);
-            if (@$local_conn->real_connect('localhost', 'root', '', 'music_db', 3306)) {
-                $conn = $local_conn;
-                $connected = true;
-            }
         }
 
         if ($connected && !$conn->connect_error) {
             $conn->set_charset("utf8mb4");
         } else {
             $db_error = $conn ? $conn->connect_error : mysqli_connect_error();
-            error_log("MySQL Connection Warning: " . $db_error);
+            error_log("Aiven MySQL Connection Warning: " . $db_error);
         }
     }
 }

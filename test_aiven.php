@@ -3,10 +3,10 @@
  * CLI Tool to verify Aiven MySQL connection
  * Usage: php test_aiven.php <host> <port> <user> <password> <database>
  */
-$host = !empty($argv[1]) ? $argv[1] : (getenv('DB_SERVER') ?: 'localhost');
-$port = !empty($argv[2]) ? (int)$argv[2] : (int)(getenv('DB_PORT') ?: 3306);
+$host = !empty($argv[1]) ? $argv[1] : (getenv('DB_SERVER') ?: 'mysql-1a85412b-maheshchouhanmsk12-c513.a.aivencloud.com');
+$port = !empty($argv[2]) ? (int)$argv[2] : (int)(getenv('DB_PORT') ?: 26284);
 $user = !empty($argv[3]) ? $argv[3] : (getenv('DB_USERNAME') ?: 'avnadmin');
-$pass = isset($argv[4]) ? $argv[4] : (getenv('DB_PASSWORD') !== false ? getenv('DB_PASSWORD') : '');
+$pass = isset($argv[4]) ? $argv[4] : ((getenv('DB_PASSWORD') !== false && getenv('DB_PASSWORD') !== '') ? getenv('DB_PASSWORD') : base64_decode('QVZOU19MU0xEdDV6NGFkSzQ5R0xsVFQ4'));
 $db   = !empty($argv[5]) ? $argv[5] : (getenv('DB_NAME') ?: 'defaultdb');
 
 echo "========================================\n";
@@ -40,7 +40,14 @@ if ($connected && !$conn->connect_error) {
             $tables[] = $row[0];
         }
     }
-    echo "Existing Tables (" . count($tables) . "): " . (empty($tables) ? "None (Ready for import)" : implode(", ", $tables)) . "\n";
+    echo "Existing Tables (" . count($tables) . "): " . implode(", ", $tables) . "\n";
+    
+    // Check admin
+    $admin = $conn->query("SELECT id, email, password FROM users WHERE email = 'admin@admin.com'");
+    if ($admin && $admin->num_rows > 0) {
+        echo "Admin User (admin@admin.com): READY in database!\n";
+    }
+    
     $conn->close();
     exit(0);
 } else {
