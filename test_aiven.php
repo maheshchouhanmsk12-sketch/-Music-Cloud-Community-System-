@@ -3,11 +3,11 @@
  * CLI Tool to verify Aiven MySQL connection
  * Usage: php test_aiven.php <host> <port> <user> <password> <database>
  */
-$host = $argv[1] ?? getenv('DB_SERVER') ?? 'localhost';
-$port = (int)($argv[2] ?? getenv('DB_PORT') ?? 3306);
-$user = $argv[3] ?? getenv('DB_USERNAME') ?? 'avnadmin';
-$pass = $argv[4] ?? getenv('DB_PASSWORD') ?? '';
-$db   = $argv[5] ?? getenv('DB_NAME') ?? 'defaultdb';
+$host = !empty($argv[1]) ? $argv[1] : (getenv('DB_SERVER') ?: 'localhost');
+$port = !empty($argv[2]) ? (int)$argv[2] : (int)(getenv('DB_PORT') ?: 3306);
+$user = !empty($argv[3]) ? $argv[3] : (getenv('DB_USERNAME') ?: 'avnadmin');
+$pass = isset($argv[4]) ? $argv[4] : (getenv('DB_PASSWORD') !== false ? getenv('DB_PASSWORD') : '');
+$db   = !empty($argv[5]) ? $argv[5] : (getenv('DB_NAME') ?: 'defaultdb');
 
 echo "========================================\n";
 echo "Testing connection to Aiven MySQL Server\n";
