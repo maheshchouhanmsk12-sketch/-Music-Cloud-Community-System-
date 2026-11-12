@@ -14,9 +14,9 @@ Production-ready, Dockerized web application built with **PHP 8.2**, **Apache**,
 
 | Portal | Endpoint URL | Description |
 | :--- | :--- | :--- |
-| **Public Website / Dashboard** | [Open Homepage](https://music-cloud-community.onrender.com/) | Music player, playlists, genre browsing, and media library |
-| **Login Portal** | [Open Login Page](https://music-cloud-community.onrender.com/login.php) | User & Administrator sign-in portal |
-| **1-Click DB Setup Tool** | [Open DB Setup Tool](https://music-cloud-community.onrender.com/db_setup.php) | Cloud MySQL Health Check & Auto-Migrator (Aiven SSL Ready) |
+| **Public Website / Dashboard** | [Open Homepage](https://music-cloud-community-system.onrender.com/) | Music player, playlists, genre browsing, and media library |
+| **Login Portal** | [Open Login Page](https://music-cloud-community-system.onrender.com/login.php) | User & Administrator sign-in portal |
+| **1-Click DB Setup Tool** | [Open DB Setup Tool](https://music-cloud-community-system.onrender.com/db_setup.php) | Cloud MySQL Health Check & Auto-Migrator (Aiven SSL Ready) |
 
 ---
 
